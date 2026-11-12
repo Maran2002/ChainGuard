@@ -1,0 +1,20 @@
+{
+  "name": "chainguard",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:client": "npm --workspace client run dev",
+    "dev:server": "npm --workspace server run dev",
+    "build": "npm --workspace client run build",
+    "lint": "npm --workspace client run lint && npm --workspace server run lint",
+    "test": "npm --workspace client run test --if-present && npm --workspace server run test --if-present",
+    "seed": "npm --workspace server run seed --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.0"
+  }
+}
