@@ -78,26 +78,16 @@ Feed ingestion commands are administrator-facing operational tools; use the Admi
 
 ## Vercel deployment
 
-Deploy the web app and API as **two Vercel projects from this repository**. In each project, set its Root Directory to the relevant workspace. Vercel documents this monorepo setup using separate projects per workspace ([monorepos](https://vercel.com/docs/monorepos)).
+ChainGuard can run as **one Vercel project**: Next.js serves the UI, and a Vercel Node Function invokes the existing Express app for `/api/v1/*`. The function opens MongoDB on demand and returns a service-unavailable response if the database cannot be reached.
 
-### 1. Deploy the API project
+1. In the existing Vercel project, set **Root Directory** to `client/`, select the **Next.js** framework preset, leave the output directory at its framework default, and keep the build command as `npm run build`.
+2. Enable **Include source files outside of the Root Directory**. The API function imports the Express app from `server/`, and the npm workspace lockfile is at the repository root. Vercel documents this option for monorepos [here](https://vercel.com/docs/monorepos/monorepo-faq).
+3. Keep this Vercel project linked to the same Git repository. The checked-in [client/vercel.json](client/vercel.json) routes `/api/v1/*` to the Express function in `client/api/index.mjs`.
+4. Add all server-side settings from `server/.env.example` to this same Vercel project. Use a managed MongoDB URI; set `NODE_ENV=production`, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=lax`, `TRUST_PROXY_HOPS=1`, exact HTTPS `CLIENT_ORIGIN`, distinct production JWT secrets, and all three Brevo settings. Production startup requires Brevo configuration.
+5. Set `NEXT_PUBLIC_API_BASE_URL=/api/v1` and `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` in this project's Production environment. The API and UI then share one origin, so browser requests use same-origin cookies.
+6. Redeploy after changing project settings or environment variables. Vercel applies changed environment values to new deployments ([environment variables](https://vercel.com/docs/environment-variables)).
 
-- Set Root Directory to `server/`.
-- Use the Node.js runtime and the workspace's `npm run start` command (`src/server.js`). Vercel supports Express applications as Functions; verify the detected build and API route after the first deployment ([Express on Vercel](https://vercel.com/docs/frameworks/backend/express)).
-- Configure the server variables in the table below in the Vercel project's Environment Variables settings. Set secrets in the Production environment and any Preview/Development environments where you need the feature. Vercel scopes values by environment, and changed values apply to new deployments ([environment variables](https://vercel.com/docs/environment-variables)).
-- Use a managed MongoDB deployment reachable from Vercel (for example, MongoDB Atlas); do not use the local example URI.
-- Set `NODE_ENV=production`, `COOKIE_SECURE=true`, exact HTTPS `CLIENT_ORIGIN` values, and separate production JWT secrets. Provide all three Brevo values: production startup requires email verification configuration.
-- Set `TRUST_PROXY_HOPS=1` for the Vercel-hosted API so Express rate limiting uses Vercel's client IP forwarding correctly. Vercel documents its forwarded client IP headers [here](https://vercel.com/docs/headers/request-headers).
-- Use a dedicated NodeReal key for BSC indexed history. Keep provider request depths and timeouts bounded for serverless execution.
-
-### 2. Deploy the web project
-
-- Set Root Directory to `client/` and use the Next.js framework preset.
-- Set `NEXT_PUBLIC_API_BASE_URL` to the deployed API URL including `/api/v1`, for example `https://api.example.com/api/v1`.
-- Set `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` for production.
-- Add the exact web origin (scheme and host, no path) to the API's `CLIENT_ORIGIN`. If using preview deployments, add the specific preview origin(s) to that environment's API configuration, or use a stable preview domain. Do not use a wildcard origin for credentialed authentication.
-
-For cookie-based authentication, prefer app and API subdomains under the same site (for example `app.example.com` and `api.example.com`) with `COOKIE_SAME_SITE=lax` and `COOKIE_SECURE=true`. If they are genuinely cross-site, use `COOKIE_SAME_SITE=none` with `COOKIE_SECURE=true`, and retain exact credentialed CORS origins. After changing Vercel environment values, redeploy the relevant project. No Vercel project is configured by this README; deployment and production smoke checks remain operator actions.
+For Preview deployments, same-origin API requests are allowed automatically, but verification emails use the `CLIENT_ORIGIN` value; use a stable preview URL if you need to test email links in Preview. Use a dedicated NodeReal key for BSC indexed history. Vercel runs Express through a Node Function ([Express on Vercel](https://vercel.com/docs/frameworks/backend/express)); keep provider and ingestion work within the function duration limits.
 
 ## Environment variables
 
@@ -109,7 +99,7 @@ Never commit `.env`, `.env.local`, credentials, or generated production secrets.
 
 | Variable | Tag | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | [REQUIRED] [VERCEL] | Browser-visible API base URL, including `/api/v1`. Local default is `http://localhost:5000/api/v1`; use the deployed HTTPS API URL in Vercel. |
+| `NEXT_PUBLIC_API_BASE_URL` | [REQUIRED] [VERCEL] | Browser-visible API base URL, including `/api/v1`. Local default is `http://localhost:5000/api/v1`; for the single-project Vercel deployment set it to `/api/v1`. |
 | `NEXT_PUBLIC_ENABLE_DEMO_MODE` | [OPTIONAL] [LOCAL] | Enables the local demo/auth gate behavior when `true`. Set to `false` in production so users go through the real API-backed account flow. |
 
 Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configuration; they are exposed to browsers and must not contain secrets.
@@ -122,7 +112,7 @@ Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configur
 | `PORT` | [LOCAL] [VERCEL] | Local API listen port (default `5000`). Vercel/runtime may supply the port; do not hardcode a deployment port unless the platform requires it. |
 | `API_PREFIX` | [OPTIONAL] | API route prefix, default `/api/v1`; keep it aligned with `NEXT_PUBLIC_API_BASE_URL`. |
 | `APP_NAME` | [OPTIONAL] | Service name used in application messages/logging; defaults to `ChainGuard`. |
-| `CLIENT_ORIGIN` | [REQUIRED] [VERCEL] | Comma-separated exact browser origins allowed by CORS and auth links, e.g. `https://app.example.com`. Production values must be HTTPS origins with no path. |
+| `CLIENT_ORIGIN` | [REQUIRED] [VERCEL] | Exact HTTPS origin used for auth email links and allowed cross-origin requests, e.g. `https://chainguard.example.com`. For this single-project deployment, the UI and API share this origin. Production values must have no path. |
 | `MONGODB_URI` | [REQUIRED] | MongoDB connection string for accounts, sessions, and screening records. Use a reachable managed database URI in Vercel, not the local default. |
 | `BREVO_SENDER_NAME` | [REQUIRED] [CONDITIONAL] | Verified sender display name for registration verification and password-reset email. All three Brevo settings are required together; mandatory in production. |
 | `BREVO_SENDER_EMAIL` | [REQUIRED] [CONDITIONAL] | Verified sender email address for transactional email. All three Brevo settings are required together; mandatory in production. |

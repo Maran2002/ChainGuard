@@ -20,3 +20,6 @@ doc/
 *.docx
 *.rtf
 !README.md
+
+.vercel
+.env*.local

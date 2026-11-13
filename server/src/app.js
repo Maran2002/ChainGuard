@@ -25,6 +25,16 @@ app.disable("x-powered-by");
 app.set("trust proxy", env.TRUST_PROXY_HOPS);
 app.use(helmet());
 const allowedOrigins = env.CLIENT_ORIGIN.split(",").map((origin) => origin.trim());
+
+function isSameOriginRequest(req, origin) {
+  try {
+    const requestOrigin = new URL(origin).origin;
+    const host = req.get("host");
+    return Boolean(host && req.protocol && requestOrigin === `${req.protocol}://${host}`);
+  } catch {
+    return false;
+  }
+}
 app.use(pinoHttp({
   logger,
   genReqId: () => randomUUID(),
@@ -56,7 +66,7 @@ app.use((req, _res, next) => {
       return next(httpError(403, "ORIGIN_NOT_ALLOWED", "This request origin is not allowed"));
     }
   }
-  if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
+  if (requestOrigin && !allowedOrigins.includes(requestOrigin) && !isSameOriginRequest(req, requestOrigin)) {
     return next(httpError(403, "ORIGIN_NOT_ALLOWED", "This request origin is not allowed"));
   }
 

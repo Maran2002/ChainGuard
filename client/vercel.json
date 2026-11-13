@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "/api?__cg_route=/api/v1/:path*"
+    },
+    {
+      "source": "/api/health/ready",
+      "destination": "/api?__cg_route=/health/ready"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api?__cg_route=/health"
+    }
+  ]
+}
