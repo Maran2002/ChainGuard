@@ -32,7 +32,7 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_DEVELOPMENT_MAX_REQUESTS: z.coerce.number().int().positive().max(10000).default(1000),
-  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(process.env.VERCEL ? 1 : 0),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
