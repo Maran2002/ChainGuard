@@ -24,9 +24,10 @@ The result is evidence available at screening time. A low-risk or `UNKNOWN` resu
 
 | Path | Purpose |
 | --- | --- |
-| `apps/web/` | Next.js UI, same-origin rewrites, and the Node API Function |
-| `apps/api/` | Express app, routes, services, adapters, MongoDB models, and scripts |
-| `package.json` and `package-lock.json` | npm workspace definition, root scripts, and the dependency lockfile |
+| `src/app/` | Next.js App Router pages and layouts |
+| `src/pages/api/` | Node Function that forwards same-origin requests to Express |
+| `src/server/` | Express routes, services, adapters, MongoDB models, and scripts |
+| `package.json` and `package-lock.json` | Root scripts, dependencies, and lockfile |
 | `vercel.json` | Vercel build settings for the repository root |
 | `.env.example` | Sanitized template for the single root `.env` |
 
@@ -47,7 +48,7 @@ npm ci
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Both apps resolve the root `.env` from their configuration file locations. Next.js reads the two documented public settings from it. Existing shell variables take precedence. For older checkouts, consolidate existing values in the root file before removing the per-app copies.
+Next.js loads the root `.env`. Server scripts resolve the same file relative to their configuration module. Existing shell variables take precedence. Use `NEXT_PUBLIC_API_BASE_URL=/api/v1` for the integrated app. If upgrading an older checkout, replace the previous `http://localhost:5000/api/v1` setting.
 
 Set distinct, randomly generated `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values in root `.env`. Each must be at least 32 characters. Run this command twice to generate the values.
 
@@ -61,18 +62,17 @@ Run that command twice, using one output for each secret. Make sure MongoDB is r
 npm run dev
 ```
 
-The web app defaults to `http://localhost:3000` and the API to `http://localhost:5000`, with API base path `/api/v1`. The template enables local demo mode. Set `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` to exercise the authenticated flow.
+One Next.js process serves the UI and API at `http://localhost:3000`. The API uses `/api/v1`, with liveness at `/api/health` and database readiness at `/api/health/ready`. The template enables local demo mode. Set `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` to exercise the authenticated flow.
 
 ### Useful commands
 
 ```powershell
-npm run dev:web
-npm run dev:api
 npm run lint
 npm run build
+npm start
 npm test
-npm --workspace @chainguard/api run providers:verify
-npm --workspace @chainguard/api run security:preflight
+npm run providers:verify
+npm run security:preflight
 ```
 
 Feed ingestion commands are administrator-facing operational tools; use the Admin UI to preview a source before applying it. Provider verification checks only the configured runtime and credentials; it does not guarantee complete chain coverage.
@@ -82,7 +82,7 @@ Feed ingestion commands are administrator-facing operational tools; use the Admi
 ChainGuard can run as **one Vercel project**: Next.js serves the UI, and a Vercel Node Function invokes the existing Express app for `/api/v1/*`. The function opens MongoDB on demand and returns a service-unavailable response if the database cannot be reached.
 
 1. In the existing project's **Build and Deployment** settings, clear **Root Directory** to select the repository root (`/`). Select **Next.js** and **Node.js 22.x**. [Vercel build settings](https://vercel.com/docs/builds/configure-a-build)
-2. The root [vercel.json](vercel.json) sets **Install Command** to `npm ci`, **Build Command** to `npm run build`, and **Output Directory** to `apps/web/.next`. Clear any old dashboard overrides for those settings. Both workspaces and the lockfile are inside the project root. The root `.vercelignore` excludes local environment files from CLI uploads.
+2. The root [vercel.json](vercel.json) sets **Install Command** to `npm ci`, **Build Command** to `npm run build`, and **Output Directory** to `.next). Clear any old dashboard overrides for those settings. The root `.vercelignore` excludes local environment files from CLI uploads.
 3. Configure the required values in this project's **Environment Variables**, scoped to **Production** and **Preview**, plus any optional providers. Scope **Development** values to development tooling. Set `MONGODB_URI` to a reachable managed database, `CLIENT_ORIGIN` to the exact HTTPS origin for email links, distinct JWT secrets, all three Brevo settings, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=lax`, and `TRUST_PROXY_HOPS=1`. Keep Vercel system variables enabled so the build and runtime can detect `VERCEL`. [Vercel environment variables](https://vercel.com/docs/environment-variables)
 4. Deploy after saving the settings. Vercel builds use same-origin `/api/v1` and disable demo mode. The Next.js rewrites route `/api/v1/*`, `/api/health`, and `/api/health/ready` to the Node Function. Check both health URLs on the deployment origin, then sign in and check `/api/v1/auth/me`.
 
@@ -90,7 +90,7 @@ Use a stable Preview origin for verification and password reset links. The API F
 
 ## Environment variables
 
-The API validates settings in [apps/api/src/config/env.js](apps/api/src/config/env.js). **[REQUIRED]** marks required values, **[OPTIONAL]** marks settings with defaults, **[LOCAL]** marks local inputs, **[VERCEL]** marks deployment inputs, and **[CONDITIONAL]** marks feature-specific requirements.
+The API validates settings in [src/server/config/env.js](src/server/config/env.js). **[REQUIRED]** marks required values, **[OPTIONAL]** marks settings with defaults, **[LOCAL]** marks local inputs, **[VERCEL]** marks deployment inputs, and **[CONDITIONAL]** marks feature-specific requirements.
 
 Never commit `.env` or credentials. The root `.env.example` contains safe defaults and placeholders.
 
@@ -98,7 +98,7 @@ Never commit `.env` or credentials. The root `.env.example` contains safe defaul
 
 | Variable | Tag | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | [OPTIONAL] [LOCAL] | Browser-visible API base URL. Local development defaults to `http://localhost:5000/api/v1`. Vercel builds use `/api/v1`. |
+| `NEXT_PUBLIC_API_BASE_URL` | [OPTIONAL] [LOCAL] | Browser-visible API base URL. The default for local development and Vercel is `/api/v1`. |
 | `NEXT_PUBLIC_ENABLE_DEMO_MODE` | [OPTIONAL] [LOCAL] | Enables local demo behavior when `true`. Vercel builds disable demo mode. |
 
 Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configuration; they are exposed to browsers and must not contain secrets.
@@ -108,7 +108,6 @@ Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configur
 | Variable | Tag | Purpose |
 | --- | --- | --- |
 | `NODE_ENV` | [LOCAL] [VERCEL] | Runtime mode (`development`, `test`, or `production`). Vercel supplies `production` for deployed Functions, enabling production security checks and rate limits. |
-| `PORT` | [OPTIONAL] [LOCAL] | Standalone Express listen port, default `5000`. |
 | `API_PREFIX` | [OPTIONAL] | API route prefix, default `/api/v1`. Keep `/api/v1` on Vercel to match the rewrite. |
 | `APP_NAME` | [OPTIONAL] | Service name used in application messages/logging; defaults to `ChainGuard`. |
 | `CLIENT_ORIGIN` | [REQUIRED] [VERCEL] | Exact HTTPS origin used for auth email links and allowed cross-origin requests, e.g. `https://chainguard.example.com`. For this single-project deployment, the UI and API share this origin. Production values must have no path. |
@@ -137,7 +136,7 @@ Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configur
 | `RATE_LIMIT_WINDOW_MS` | [OPTIONAL] | Rate-limit window in milliseconds; default `900000` (15 minutes). |
 | `RATE_LIMIT_MAX_REQUESTS` | [OPTIONAL] | Maximum requests per IP per rate-limit window outside development; default `100`. |
 | `RATE_LIMIT_DEVELOPMENT_MAX_REQUESTS` | [OPTIONAL] [LOCAL] | Development request limit; default `1000`. It is not used as the production limit. |
-| `TRUST_PROXY_HOPS` | [OPTIONAL] [VERCEL] | Number of trusted reverse-proxy hops for Express IP handling. Defaults to `1` on Vercel and `0` for the local direct server. |
+| `TRUST_PROXY_HOPS` | [OPTIONAL] [VERCEL] | Number of trusted reverse-proxy hops for Express IP handling. Defaults to `1` on Vercel and `0` locally. |
 | `LOG_LEVEL` | [OPTIONAL] | Logging verbosity (`fatal`, `error`, `warn`, `info`, `debug`, `trace`, `silent`); default `info`. |
 
 ### Operational inputs
@@ -148,7 +147,7 @@ Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configur
 | `CHAINGUARD_ADMIN_PASSWORD` | [LOCAL] [CONDITIONAL] | Required for `npm run seed:admin`. Supply it to the seed process. |
 | `npm_config_source`, `npm_config_apply` | [LOCAL] [OPTIONAL] | Legacy npm inputs for ingestion. Use the CLI flags `--source` and `--apply`. |
 
-The legacy `ETHERSCAN_API_KEY` is unused. Ethereum queries use `ETHEREUM_RPC_URL`, including Alchemy indexed-history calls. The Vercel CLI can generate a temporary `VERCEL_OIDC_TOKEN` during an environment pull. ChainGuard does not read that token.
+The legacy `ETHERSCAN_API_KEY` is unused. Ethereum queries use `ETHEREUM_RPC_URL`, including Alchemy indexed-history calls. The Vercel CLI can generate a temporary `VERCEL_OIDC_TOKEN` during an environment pull. ChainGuard does not read that token. If an older `.env` still sets `PORT=5000`, remove that legacy Express setting. To change the local Next.js port, pass `npm run dev -- --port <port>`.
 
 ## Security and operational notes
 

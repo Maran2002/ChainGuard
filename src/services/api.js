@@ -1,6 +1,4 @@
-const localApiBase = "http://localhost:5000/api/v1";
-const productionApiBase = "/api/v1";
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || (process.env.NODE_ENV === "development" ? localApiBase : productionApiBase);
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1";
 const currentUserCacheDurationMs = 15_000;
 let currentUserCache = null;
 let currentUserCacheAt = 0;

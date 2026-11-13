@@ -5,7 +5,7 @@ function fail(message) {
 
 const [clientArgument, apiArgument] = process.argv.slice(2);
 if (!clientArgument || !apiArgument) {
-  console.error("Usage: node src/scripts/security-probe.js <client-https-url> <api-https-base-url>");
+  console.error("Usage: npm run security:probe -- <client-https-url> <api-https-base-url>");
   process.exitCode = 2;
 } else {
   const clientUrl = new URL(clientArgument);

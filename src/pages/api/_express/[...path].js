@@ -14,8 +14,8 @@ export default async function handler(req, res) {
   for (const method of ["status", "send", "json", "redirect"]) delete res[method];
 
   const [{ default: app }, { default: connectDatabase }] = await Promise.all([
-    import("@chainguard/api/app"),
-    import("@chainguard/api/database"),
+    import("../../../server/app.js"),
+    import("../../../server/config/database.js"),
   ]);
 
   const path = req.url.split("?", 1)[0];

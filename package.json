@@ -2,25 +2,47 @@
   "name": "chainguard",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/web",
-    "apps/api"
-  ],
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:web": "npm --workspace @chainguard/web run dev",
-    "dev:api": "npm --workspace @chainguard/api run dev",
-    "build": "npm --workspace @chainguard/web run build",
-    "lint": "npm run lint --workspaces --if-present",
-    "test": "npm test --workspaces --if-present",
-    "ingest": "npm --workspace @chainguard/api run ingest --",
-    "seed:admin": "npm --workspace @chainguard/api run seed:admin"
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "node --test src/server/tests/*.test.js",
+    "ingest": "node src/server/scripts/ingest-intelligence.js",
+    "providers:verify": "node src/server/scripts/verify-providers.js",
+    "security:preflight": "node src/server/scripts/security-preflight.js",
+    "security:probe": "node src/server/scripts/security-probe.js",
+    "security:cleanup-transaction-cache": "node src/server/scripts/cleanup-legacy-transaction-cache.js",
+    "seed:admin": "node src/server/scripts/seed-admin.js"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "next": "^16.0.0"
+    "@tailwindcss/postcss": "^4.1.0",
+    "eslint": "^9.0.0",
+    "tailwindcss": "^4.1.0",
+    "@eslint/js": "^9.39.0",
+    "supertest": "^7.3.2"
   },
   "engines": {
     "node": "22.x"
+  },
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.468.0",
+    "mongoose": "^8.19.0",
+    "next": "^16.0.0",
+    "pino": "^9.9.0",
+    "pino-http": "^10.5.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.0"
   }
 }

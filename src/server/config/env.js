@@ -4,13 +4,12 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 if (!process.env.VERCEL) {
-  const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+  const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
   dotenv.config({ path: resolve(repositoryRoot, ".env") });
 }
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().int().min(1).max(65535).default(5000),
   API_PREFIX: z.string().startsWith("/").default("/api/v1"),
   APP_NAME: z.string().min(1).default("ChainGuard"),
   CLIENT_ORIGIN: z.string().default("http://localhost:3000"),

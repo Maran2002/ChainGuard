@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 function apiOrigin() {
-  const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL || (process.env.NODE_ENV === "development" ? "http://localhost:5000/api/v1" : "/api/v1");
+  const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1";
   try {
     return new URL(configuredApi).origin;
   } catch {

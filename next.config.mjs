@@ -1,31 +1,22 @@
-import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 
 if (process.env.VERCEL) {
   process.env.NEXT_PUBLIC_API_BASE_URL = "/api/v1";
   process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE = "false";
-} else {
-  const localEnv = {};
-  const { error } = dotenv.config({
-    path: fileURLToPath(new URL("../../.env", import.meta.url)),
-    processEnv: localEnv,
-  });
-  if (error && error.code !== "ENOENT") throw error;
-  for (const key of ["NEXT_PUBLIC_API_BASE_URL", "NEXT_PUBLIC_ENABLE_DEMO_MODE"]) {
-    if (localEnv[key] !== undefined) process.env[key] ??= localEnv[key];
-  }
 }
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
-  outputFileTracingExcludes: { "/api/**": ["../../.env", "../../.env.*"] },
+  outputFileTracingRoot: fileURLToPath(new URL(".", import.meta.url)),
+  outputFileTracingExcludes: { "/*": [".env", ".env.*"] },
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: "/api/_express/v1/:path*" },
       { source: "/api/health/ready", destination: "/api/_express/health/ready" },
       { source: "/api/health", destination: "/api/_express/health" },
+      { source: "/health/ready", destination: "/api/_express/health/ready" },
+      { source: "/health", destination: "/api/_express/health" },
     ];
   },
   async headers() {

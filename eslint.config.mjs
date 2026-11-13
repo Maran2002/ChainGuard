@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 
 export default [
-  { ignores: [".next/**", "node_modules/**"] },
+  { ignores: ["**/.next/**", "**/node_modules/**", ".vercel/**"] },
   js.configs.recommended,
   {
     files: ["**/*.{js,jsx,mjs}"],
@@ -28,6 +28,15 @@ export default [
         "error",
         { argsIgnorePattern: "^_|^[A-Z]", caughtErrorsIgnorePattern: "^_", varsIgnorePattern: "^[A-Z]" },
       ],
+    },
+  },
+  {
+    files: ["src/server/**/*.js"],
+    languageOptions: {
+      globals: { Buffer: "readonly", AbortController: "readonly", AbortSignal: "readonly" },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }],
     },
   },
 ];
