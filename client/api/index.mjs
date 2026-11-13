@@ -1,6 +1,15 @@
 import mongoose from "mongoose";
-import { app } from "../../server/src/app.js";
-import { connectDatabase } from "../../server/src/config/database.js";
+import * as appModule from "../../server/src/app.js";
+import * as databaseModule from "../../server/src/config/database.js";
+
+const app = appModule.app ?? appModule.default?.app ?? appModule.default;
+const connectDatabase = databaseModule.connectDatabase
+  ?? databaseModule.default?.connectDatabase
+  ?? databaseModule.default;
+
+if (typeof app !== "function" || typeof connectDatabase !== "function") {
+  throw new TypeError("The Vercel API entry could not load the Express app and database connector");
+}
 
 const internalRouteQuery = "__cg_route";
 const healthPaths = new Set(["/health", "/health/ready"]);

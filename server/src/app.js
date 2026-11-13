@@ -20,6 +20,7 @@ import { adminIntelligenceRouter } from "./routes/admin-intelligence.js";
 import { productionRateLimitStore } from "./middleware/mongo-rate-limit-store.js";
 
 export const app = express();
+export default app;
 
 app.disable("x-powered-by");
 app.set("trust proxy", env.TRUST_PROXY_HOPS);

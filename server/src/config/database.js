@@ -12,3 +12,5 @@ export async function connectDatabase() {
     return false;
   }
 }
+
+export default connectDatabase;
