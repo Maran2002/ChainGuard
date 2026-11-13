@@ -26,4 +26,7 @@ export class BlockchainAdapter {
   async getAddressTransactions() {
     throw new Error("getAddressTransactions must be implemented by a blockchain adapter");
   }
+
+  // Return normalized transaction rows with hash, fromAddress, toAddress, amount,
+  // timestamp, and optional asset/value fields; the application validates each row.
 }

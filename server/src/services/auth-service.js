@@ -1,15 +1,22 @@
 import bcrypt from "bcryptjs";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { env } from "../config/env.js";
 import { RefreshSession } from "../models/refresh-session.js";
 import { User } from "../models/user.js";
+import { Screening } from "../models/screening.js";
+import { sendAccountActionEmail } from "./email/brevo-mailer.js";
+import { logger } from "../utils/logger.js";
 import { httpError } from "../utils/http-error.js";
 
 const accessCookie = "cg_access";
 const refreshCookie = "cg_refresh";
 const jwtOptions = { issuer: env.APP_NAME, audience: "chainguard-client" };
+const emailVerificationTtlMs = 24 * 60 * 60 * 1000;
+const passwordResetTtlMs = 60 * 60 * 1000;
+const emailActionCooldownMs = 60 * 1000;
+const signInAllowedStatuses = ["VERIFIED", "ACTIVE"];
 
 function durationMs(value) {
   const match = /^([1-9]\d*)(s|m|h|d)$/.exec(value);
@@ -20,6 +27,69 @@ function durationMs(value) {
 
 function hashToken(token) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function emailActionUrl(path, token) {
+  const appOrigin = env.CLIENT_ORIGIN.split(",")[0].trim().replace(/\/+$/, "");
+  return `${appOrigin}/${path}#token=${encodeURIComponent(token)}`;
+}
+
+function logEmailFailure(flow, error) {
+  logger.warn({ flow, code: error.code || "EMAIL_DELIVERY_FAILED" }, "Account security email was not sent");
+}
+
+async function issueEmailVerification(user) {
+  const token = randomBytes(32).toString("base64url");
+  const now = new Date();
+  user.emailVerificationTokenHash = hashToken(token);
+  user.emailVerificationExpiresAt = new Date(now.getTime() + emailVerificationTtlMs);
+  user.emailVerificationLastSentAt = now;
+  await user.save();
+  try {
+    await sendAccountActionEmail({
+      recipientEmail: user.email,
+      recipientName: user.name,
+      subject: "Verify your ChainGuard email",
+      heading: "Confirm your email address",
+      description: "Verify this email address to finish creating your ChainGuard account.",
+      actionLabel: "Verify email",
+      actionUrl: emailActionUrl("verify-email", token),
+      expiryText: "24 hours",
+    });
+    return true;
+  } catch (error) {
+    logEmailFailure("email_verification", error);
+    user.emailVerificationLastSentAt = null;
+    await user.save();
+    return false;
+  }
+}
+
+async function issuePasswordReset(user) {
+  const token = randomBytes(32).toString("base64url");
+  const now = new Date();
+  user.passwordResetTokenHash = hashToken(token);
+  user.passwordResetExpiresAt = new Date(now.getTime() + passwordResetTtlMs);
+  user.passwordResetLastSentAt = now;
+  await user.save();
+  try {
+    await sendAccountActionEmail({
+      recipientEmail: user.email,
+      recipientName: user.name,
+      subject: "Reset your ChainGuard password",
+      heading: "Reset your password",
+      description: "We received a request to change the password for your ChainGuard account.",
+      actionLabel: "Choose a new password",
+      actionUrl: emailActionUrl("reset-password", token),
+      expiryText: "1 hour",
+    });
+    return true;
+  } catch (error) {
+    logEmailFailure("password_reset", error);
+    user.passwordResetLastSentAt = null;
+    await user.save();
+    return false;
+  }
 }
 
 function safeEqual(left, right) {
@@ -80,31 +150,131 @@ async function issueSession(user, req, res) {
 }
 
 function publicUser(user) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status, createdAt: user.createdAt };
+  return { id: user.id, name: user.name, username: user.username || null, email: user.email, role: user.role, status: user.status, preferences: user.preferences, createdAt: user.createdAt };
 }
 
-export async function register({ name, email, password }, req, res) {
+export async function register({ name, email, password }) {
   if (Buffer.byteLength(password, "utf8") > 72) {
     throw httpError(400, "VALIDATION_ERROR", "Password must not exceed 72 UTF-8 bytes");
   }
   const passwordHash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
   let user;
   try {
-    user = await User.create({ name, email: email.toLowerCase(), passwordHash, role: "USER" });
+    user = await User.create({ name, email: email.toLowerCase(), passwordHash, role: "USER", status: "NOT_VERIFIED" });
   } catch (error) {
     if (error?.code === 11000) throw httpError(409, "EMAIL_ALREADY_REGISTERED", "An account with this email already exists");
     throw error;
   }
-  await issueSession(user, req, res);
+  const verificationEmailSent = await issueEmailVerification(user);
+  return { user: publicUser(user), verificationEmailSent };
+}
+
+export async function resendEmailVerification(email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail, status: "NOT_VERIFIED" }).select("+emailVerificationLastSentAt");
+  if (!user) return;
+  const sentAt = user.emailVerificationLastSentAt?.getTime();
+  if (sentAt && Date.now() - sentAt < emailActionCooldownMs) return;
+  await issueEmailVerification(user);
+}
+
+export async function verifyEmailAddress(token) {
+  const user = await User.findOneAndUpdate({
+    emailVerificationTokenHash: hashToken(token),
+    emailVerificationExpiresAt: { $gt: new Date() },
+    status: "NOT_VERIFIED",
+  }, {
+    $set: { status: "VERIFIED", emailVerifiedAt: new Date() },
+    $unset: { emailVerificationTokenHash: 1, emailVerificationExpiresAt: 1, emailVerificationLastSentAt: 1 },
+  }, { new: true, runValidators: true });
+  if (!user) throw httpError(400, "VERIFICATION_LINK_INVALID", "This verification link is invalid or expired. Request a new one and try again.");
   return publicUser(user);
 }
 
+export async function requestPasswordReset(email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail, status: { $in: signInAllowedStatuses } }).select("+passwordResetLastSentAt");
+  if (!user) return;
+  const sentAt = user.passwordResetLastSentAt?.getTime();
+  if (sentAt && Date.now() - sentAt < emailActionCooldownMs) return;
+  await issuePasswordReset(user);
+}
+
+export async function validatePasswordResetToken(token) {
+  const user = await User.exists({
+    passwordResetTokenHash: hashToken(token),
+    passwordResetExpiresAt: { $gt: new Date() },
+    status: { $in: signInAllowedStatuses },
+  });
+  if (!user) throw httpError(400, "RESET_LINK_INVALID", "This password reset link is invalid or expired. Request a new one and try again.");
+  return { valid: true };
+}
+
+export async function resetPassword({ token, newPassword }) {
+  if (Buffer.byteLength(newPassword, "utf8") > 72) {
+    throw httpError(400, "VALIDATION_ERROR", "Password must not exceed 72 UTF-8 bytes");
+  }
+  const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
+  const user = await User.findOneAndUpdate({
+    passwordResetTokenHash: hashToken(token),
+    passwordResetExpiresAt: { $gt: new Date() },
+    status: { $in: signInAllowedStatuses },
+  }, {
+    $set: { passwordHash },
+    $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1, passwordResetLastSentAt: 1 },
+  }, { new: true, runValidators: true });
+  if (!user) throw httpError(400, "RESET_LINK_INVALID", "This password reset link is invalid or expired. Request a new one and try again.");
+  await RefreshSession.updateMany({ userId: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } });
+  return publicUser(user);
+}
+
+export async function changePassword({ currentPassword, newPassword }, req) {
+  if (Buffer.byteLength(newPassword, "utf8") > 72) {
+    throw httpError(400, "VALIDATION_ERROR", "Password must not exceed 72 UTF-8 bytes");
+  }
+  const user = await User.findById(req.user.id).select("+passwordHash");
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw httpError(400, "CURRENT_PASSWORD_INVALID", "Current password is incorrect");
+  }
+  if (await bcrypt.compare(newPassword, user.passwordHash)) {
+    throw httpError(409, "PASSWORD_UNCHANGED", "Choose a password different from your current password");
+  }
+  const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
+  await RefreshSession.updateMany(
+    { userId: user._id, _id: { $ne: req.sessionId }, revokedAt: null },
+    { $set: { revokedAt: new Date() } },
+  );
+  user.passwordHash = passwordHash;
+  await user.save();
+  return publicUser(user);
+}
+
+export async function deleteOwnAccount({ currentPassword }, req) {
+  const user = await User.findById(req.user.id).select("+passwordHash");
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw httpError(400, "CURRENT_PASSWORD_INVALID", "Current password is incorrect");
+  }
+  if (user.role === "ADMIN") {
+    const enabledAdmins = await User.countDocuments({ role: "ADMIN", status: { $in: signInAllowedStatuses } });
+    if (enabledAdmins <= 1) throw httpError(409, "LAST_ADMIN", "The last enabled administrator account cannot be deleted");
+  }
+
+  await Screening.deleteMany({ userId: user._id });
+  await RefreshSession.deleteMany({ userId: user._id });
+  const deleted = await User.deleteOne({ _id: user._id, passwordHash: user.passwordHash });
+  if (deleted.deletedCount !== 1) throw httpError(409, "ACCOUNT_CHANGED", "Account details changed during deletion. Sign in and try again.");
+  return true;
+}
+
 export async function login({ email, password }, req, res) {
-  const user = await User.findOne({ email: email.toLowerCase() }).select("+passwordHash");
+  const identifier = email.trim().toLowerCase();
+  const user = await User.findOne({ $or: [{ email: identifier }, { username: identifier }] }).select("+passwordHash");
   const validPassword = user ? await bcrypt.compare(password, user.passwordHash) : await bcrypt.compare(password, "$2b$12$C6UzMDM.H6dfI/f/IKcEe.5QhSa/6dXkpM6BkPZqS5tU8FUY3ec6K");
-  if (!user || !validPassword || user.status !== "ACTIVE") {
+  if (!user || !validPassword) {
     throw httpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
   }
+  if (user.status === "NOT_VERIFIED") throw httpError(403, "EMAIL_NOT_VERIFIED", "Verify your email address before signing in.");
+  if (!signInAllowedStatuses.includes(user.status)) throw httpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
   user.lastLoginAt = new Date();
   await user.save();
   await issueSession(user, req, res);
@@ -156,7 +326,7 @@ export async function refresh(req, res) {
     clearAuthCookies(res);
     throw httpError(401, "SESSION_REUSED", "This session has already been refreshed. Please sign in again.");
   }
-  const user = await User.findOne({ _id: payload.sub, status: "ACTIVE" });
+  const user = await User.findOne({ _id: payload.sub, status: { $in: signInAllowedStatuses } });
   if (!user) {
     clearAuthCookies(res);
     throw httpError(401, "SESSION_EXPIRED", "Your session is no longer active. Please sign in again.");
@@ -184,11 +354,12 @@ export async function authenticate(req, _res, next) {
     const payload = verifyAccessToken(token);
     if (!payload) throw new Error("Invalid access token");
     const [user, session] = await Promise.all([
-      User.findOne({ _id: payload.sub, status: "ACTIVE" }),
+      User.findOne({ _id: payload.sub, status: { $in: signInAllowedStatuses } }),
       RefreshSession.findOne({ _id: payload.sid, userId: payload.sub, revokedAt: null, expiresAt: { $gt: new Date() } }),
     ]);
     if (!user || !session) throw httpError(401, "AUTHENTICATION_REQUIRED", "Please sign in to continue");
     req.user = user;
+    req.sessionId = payload.sid;
     return next();
   } catch (error) {
     if (error.statusCode) return next(error);

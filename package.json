@@ -10,7 +10,9 @@
     "build": "npm --workspace client run build",
     "lint": "npm --workspace client run lint && npm --workspace server run lint",
     "test": "npm --workspace client run test --if-present && npm --workspace server run test --if-present",
-    "seed": "npm --workspace server run seed --if-present"
+    "seed": "npm --workspace server run seed --if-present",
+    "ingest": "npm --workspace server run ingest --",
+    "seed:admin": "npm --workspace server run seed:admin"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

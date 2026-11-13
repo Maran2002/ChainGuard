@@ -4,9 +4,9 @@ import { httpError } from "../utils/http-error.js";
 const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 export const chains = Object.freeze({
-  TRON: Object.freeze({ id: "TRON", family: "TRON", status: "VALIDATION_ONLY", usdtContract: null }),
-  ETHEREUM: Object.freeze({ id: "ETHEREUM", family: "EVM", status: "VALIDATION_ONLY", usdtContract: null }),
-  BSC: Object.freeze({ id: "BSC", family: "EVM", status: "VALIDATION_ONLY", usdtContract: null }),
+  TRON: Object.freeze({ id: "TRON", family: "TRON", status: "VALIDATION_ONLY", tokenContracts: Object.freeze({ USDT: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" }) }),
+  ETHEREUM: Object.freeze({ id: "ETHEREUM", family: "EVM", status: "VALIDATION_ONLY", tokenContracts: Object.freeze({ USDT: "0xdac17f958d2ee523a2206206994597c13d831ec7", USDC: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" }) }),
+  BSC: Object.freeze({ id: "BSC", family: "EVM", status: "VALIDATION_ONLY", tokenContracts: Object.freeze({}) }),
 });
 
 function sha256(value) {
@@ -28,6 +28,19 @@ function decodeBase58(value) {
   return Buffer.concat([Buffer.alloc(leadingZeroes), body]);
 }
 
+function encodeBase58(value) {
+  let number = BigInt(`0x${value.toString("hex")}`);
+  let encoded = "";
+  while (number > 0n) {
+    const remainder = Number(number % 58n);
+    encoded = `${base58Alphabet[remainder]}${encoded}`;
+    number /= 58n;
+  }
+  let leadingZeroes = 0;
+  while (leadingZeroes < value.length && value[leadingZeroes] === 0) leadingZeroes += 1;
+  return `${"1".repeat(leadingZeroes)}${encoded}`;
+}
+
 function tronAddressToHex(address) {
   if (/^41[a-fA-F0-9]{40}$/.test(address)) return address.toLowerCase();
   if (!/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)) return null;
@@ -39,6 +52,14 @@ function tronAddressToHex(address) {
   const expected = sha256(sha256(payload)).subarray(0, 4);
   if (!expected.equals(checksum)) return null;
   return payload.toString("hex");
+}
+
+export function tronAddressToBase58(address) {
+  const normalized = typeof address === "string" ? address.trim().replace(/^0x/i, "") : "";
+  if (!/^41[a-fA-F0-9]{40}$/.test(normalized)) return null;
+  const payload = Buffer.from(normalized, "hex");
+  const checksum = sha256(sha256(payload)).subarray(0, 4);
+  return encodeBase58(Buffer.concat([payload, checksum]));
 }
 
 export function normalizeAddress(chainId, input) {

@@ -10,3 +10,13 @@ dist/
 .vercel/
 .DS_Store
 Thumbs.db
+
+# Keep the root README as the tracked project entry point; local docs stay local.
+docs/
+doc/
+*.md
+*.MD
+*.doc
+*.docx
+*.rtf
+!README.md

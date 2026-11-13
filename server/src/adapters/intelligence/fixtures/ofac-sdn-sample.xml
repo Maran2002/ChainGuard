@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdnList xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <sdnEntry>
+    <uid>900001</uid>
+    <firstName>EXAMPLE</firstName>
+    <lastName>FIXTURE ENTITY</lastName>
+    <sdnType>Entity</sdnType>
+    <programList><program>FIXTURE_PROGRAM</program></programList>
+    <idList>
+      <id><idType>Digital Currency Address - TRX</idType><idNumber>TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL</idNumber></id>
+      <id><idType>Digital Currency Address - ETH</idType><idNumber>0x1111111111111111111111111111111111111111</idNumber></id>
+      <id><idType>Digital Currency Address - BSC</idType><idNumber>0x2222222222222222222222222222222222222222</idNumber></id>
+    </idList>
+  </sdnEntry>
+</sdnList>

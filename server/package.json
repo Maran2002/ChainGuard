@@ -7,7 +7,13 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "lint": "eslint .",
-    "test": "node --test"
+    "test": "node --test",
+    "ingest": "node src/scripts/ingest-intelligence.js",
+    "providers:verify": "node src/scripts/verify-providers.js",
+    "security:preflight": "node src/scripts/security-preflight.js",
+    "security:probe": "node src/scripts/security-probe.js",
+    "security:cleanup-transaction-cache": "node src/scripts/cleanup-legacy-transaction-cache.js",
+    "seed:admin": "node src/scripts/seed-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

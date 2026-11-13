@@ -17,16 +17,11 @@ function selectedFields() {
   return "address chain category riskLevel entityName sourceId sourceName sourceUrl description confidence effectiveAt lastSeenAt ingestedAt rawReference tags isActive confirmed";
 }
 
-export async function listIntelligence(query) {
-  const filter = { isActive: true };
+function buildFilter(query) {
+  const filter = query.includeInactive ? {} : { isActive: true };
   if (query.chain) filter.chain = query.chain;
   if (query.category) filter.category = query.category;
   if (query.riskLevel) filter.riskLevel = query.riskLevel;
-  if (query.from || query.to) {
-    filter.ingestedAt = {};
-    if (query.from) filter.ingestedAt.$gte = new Date(query.from);
-    if (query.to) filter.ingestedAt.$lte = new Date(query.to);
-  }
   if (query.source) {
     const source = new RegExp(escapeRegex(query.source), "i");
     filter.$or = [{ sourceId: source }, { sourceName: source }];
@@ -35,12 +30,25 @@ export async function listIntelligence(query) {
     const term = new RegExp(escapeRegex(query.q), "i");
     filter.$and = [...(filter.$and || []), { $or: [{ address: term }, { entityName: term }, { category: term }, { sourceId: term }, { sourceName: term }, { tags: term }] }];
   }
+  return filter;
+}
+
+export async function listIntelligence(query) {
+  const filter = buildFilter(query);
   const skip = (query.page - 1) * query.limit;
   const [items, total] = await Promise.all([
     IntelligenceRecord.find(filter).select(selectedFields()).sort(sortFor(query.sort)).skip(skip).limit(query.limit).lean(),
     IntelligenceRecord.countDocuments(filter),
   ]);
   return { items, meta: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } };
+}
+
+export async function exportIntelligence(query, maxRows = 5000) {
+  const filter = buildFilter(query);
+  const total = await IntelligenceRecord.countDocuments(filter);
+  if (total > maxRows) throw httpError(413, "EXPORT_TOO_LARGE", `This export matches ${total} records. Narrow the filters to ${maxRows} records or fewer.`);
+  const items = await IntelligenceRecord.find(filter).select(selectedFields()).sort(sortFor(query.sort)).limit(maxRows).lean();
+  return { items, total };
 }
 
 export async function getIntelligenceRecord(id) {

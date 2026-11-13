@@ -14,8 +14,9 @@ test("registration rejects short passwords and client-selected roles", () => {
   assert.equal(registerSchema.safeParse({ name: "Alex", email: "alex@example.com", password: "a-long-passphrase-42", role: "ADMIN" }).success, false);
 });
 
-test("login requires a valid email and non-empty password", () => {
-  assert.equal(loginSchema.safeParse({ email: "not-an-email", password: "secret" }).success, false);
+test("login accepts a valid email or username and requires a non-empty password", () => {
+  assert.equal(loginSchema.safeParse({ email: "no!", password: "secret" }).success, false);
   assert.equal(loginSchema.safeParse({ email: "alex@example.com", password: "" }).success, false);
   assert.equal(loginSchema.safeParse({ email: "alex@example.com", password: "secret" }).success, true);
+  assert.equal(loginSchema.safeParse({ email: "admin", password: "secret" }).success, true);
 });

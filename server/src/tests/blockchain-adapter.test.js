@@ -10,7 +10,7 @@ test("mock provider labels deterministic fixture-only data", async () => {
   assert.equal(adapter.status, "MOCK");
   assert.equal(first.dataLabel, "SIMULATED_FIXTURE");
   assert.deepEqual(first, second);
-  assert.equal(first.coverage.scope, "fixtures only");
+  assert.equal(first.coverage.scope, "deterministic fixtures only");
 });
 
 test("unconfigured provider reports unavailable with incomplete coverage", async () => {

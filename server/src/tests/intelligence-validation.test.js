@@ -21,8 +21,7 @@ test("directory query rejects unsupported filters and client-controlled fields",
   assert.equal(intelligenceListSchema.safeParse({ isActive: "false" }).success, false);
 });
 
-test("directory date range requires valid ordered ISO timestamps", () => {
-  assert.equal(intelligenceListSchema.safeParse({ from: "yesterday" }).success, false);
-  assert.equal(intelligenceListSchema.safeParse({ from: "2026-11-03T00:00:00.000Z", to: "2026-11-04T23:59:59.999Z" }).success, true);
-  assert.equal(intelligenceListSchema.safeParse({ from: "2026-11-05T00:00:00.000Z", to: "2026-11-04T23:59:59.999Z" }).success, false);
+test("directory query rejects incident-date filters because incident dates are not provided", () => {
+  assert.equal(intelligenceListSchema.safeParse({ from: "2026-11-03T00:00:00.000Z" }).success, false);
+  assert.equal(intelligenceListSchema.safeParse({ to: "2026-11-04T23:59:59.999Z" }).success, false);
 });

@@ -1,4 +1,4 @@
-export const RISK_MODEL_VERSION = "1.0.0";
+export const RISK_MODEL_VERSION = "1.1.0";
 
 const severity = Object.freeze({ LOW: 20, MEDIUM: 42, HIGH: 68, CRITICAL: 90 });
 
@@ -25,6 +25,7 @@ function sourceFactor(item, kind, score, explanation) {
     confidence: confidenceOf(item.confidence),
     explanation,
     timestamp: factorTimestamp(item),
+    sourceUrl: item.sourceUrl || null,
   };
 }
 
@@ -56,7 +57,12 @@ function exposureFactors(findings = []) {
     const amountBonus = amount >= 100000 ? 10 : amount >= 10000 ? 5 : 0;
     const score = Math.round(Math.min(80, (base * distanceScale + amountBonus) * confidenceOf(finding.confidence)));
     const explanation = `${distance}-hop counterparty exposure${amountBonus ? ` with at least $${amountBonus === 10 ? "100,000" : "10,000"} reported exposure` : ""}; this is an exposure indicator, not a direct designation.`;
-    return { ...sourceFactor(finding, "COUNTERPARTY_EXPOSURE", score, explanation), distance };
+    const context = finding.counterpartyAddress ? ` Connected wallet: ${finding.counterpartyAddress}. Connectivity does not establish the flow or provenance of funds.` : "";
+    const fixtureNote = finding.dataLabel === "SIMULATED_FIXTURE" ? " Transfer path uses simulated fixtures." : "";
+    return { ...sourceFactor(finding, "COUNTERPARTY_EXPOSURE", score, explanation + context + fixtureNote), distance,
+      counterpartyAddress: finding.counterpartyAddress || null, recordId: finding.recordId || null,
+      sourceUrl: finding.sourceUrl || null, dataLabel: finding.dataLabel || null,
+    };
   });
 }
 
@@ -79,7 +85,7 @@ function verdictFor(score, hasAdequateCoverage, hasKnownEvidence, hasConfirmedCr
 }
 
 function nextAction(verdict, hasCoverage) {
-  if (!hasCoverage) return "Configure providers and repeat the investigation before making a decision.";
+  if (!hasCoverage) return "This result is inconclusive because source coverage is incomplete or stale. Refresh applicable sources and review coverage before relying on it.";
   if (verdict === "CRITICAL") return "Escalate for immediate compliance review and follow applicable policy.";
   if (verdict === "HIGH") return "Pause interaction and review the cited evidence with a compliance analyst.";
   if (verdict === "MEDIUM") return "Review exposure and behavioral factors before proceeding.";
@@ -89,7 +95,8 @@ function nextAction(verdict, hasCoverage) {
 
 export function calculateRisk(input) {
   const direct = directFactors(input.directMatches);
-  if (input.issuerFreezeMatch) direct.push(...directFactors([{ ...input.issuerFreezeMatch, category: "FROZEN", confirmed: input.issuerFreezeMatch.confirmed === true }]));
+  const freezeMatches = [...(input.issuerFreezeMatches || []), ...(input.issuerFreezeMatch ? [input.issuerFreezeMatch] : [])];
+  for (const match of freezeMatches) direct.push(...directFactors([{ ...match, category: "FROZEN", confirmed: match.confirmed === true }]));
   const exposure = exposureFactors(input.exposureFindings);
   const behavior = behaviorFactors(input.behaviorFindings);
   const factors = [...direct, ...exposure, ...behavior];
@@ -115,9 +122,13 @@ export function calculateRisk(input) {
     exposureSummary: { findings: exposure.length, maxDistance: exposure.length ? Math.max(...exposure.map((item) => item.distance)) : 0 },
     behaviorSummary: { findings: behavior.length },
     coverage: {
+      complete: coverageComplete,
+      fresh: input.coverage?.fresh === true,
+      notes: input.coverage?.notes || [],
       status: coverageComplete ? "COMPLETE" : "INCOMPLETE",
       freshness: input.coverage?.fresh === true ? "CURRENT" : "STALE_OR_UNKNOWN",
       sources: input.coverage?.sources || [],
+      sourceFreshness: input.coverage?.sourceFreshness || [],
       providerErrors: input.providerErrors || [],
     },
     providerStatus,

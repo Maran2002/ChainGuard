@@ -16,6 +16,10 @@ export const screeningListSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 }).strict();
 
+export const reinvestigationSchema = z.object({
+  depth: z.coerce.number().int().min(1).max(2).optional(),
+}).strict().default({});
+
 export function parseQuery(schema) {
   return (req, _res, next) => {
     const result = schema.safeParse(req.query);
