@@ -24,33 +24,32 @@ The result is evidence available at screening time. A low-risk or `UNKNOWN` resu
 
 | Path | Purpose |
 | --- | --- |
-| `client/` | Next.js web application |
-| `server/` | Express API, adapters, services, and scripts |
-| `server/src/adapters/` | Blockchain and intelligence-source integrations |
-| `server/src/routes/` | API routes, including user and admin endpoints |
-| `server/src/models/` | MongoDB models |
-| `client/.env.example` | Public client configuration template |
-| `server/.env.example` | API configuration template |
+| `apps/web/` | Next.js UI, same-origin rewrites, and the Node API Function |
+| `apps/api/` | Express app, routes, services, adapters, MongoDB models, and scripts |
+| `package.json` and `package-lock.json` | npm workspace definition, root scripts, and the dependency lockfile |
+| `vercel.json` | Vercel build settings for the repository root |
+| `.env.example` | Sanitized template for the single root `.env` |
 
 ## Local development
 
 ### Requirements
 
-- Node.js 20.9 or newer (Node.js 22 is supported by the current project runtime).
+- Node.js 22.x, matching the Vercel runtime.
 - npm.
 - MongoDB, local or hosted.
 
 ### Start the app
 
-From the repository root, install dependencies and create local environment files:
+From the repository root, install dependencies and create the local environment file if it is missing.
 
 ```powershell
-npm install
-Copy-Item client/.env.example client/.env.local
-Copy-Item server/.env.example server/.env
+npm ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Set distinct, randomly generated `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values in `server/.env`. Each must be at least 32 characters. For example, generate values with Node:
+Both apps resolve the root `.env` from their configuration file locations. Next.js reads the two documented public settings from it. Existing shell variables take precedence. For older checkouts, consolidate existing values in the root file before removing the per-app copies.
+
+Set distinct, randomly generated `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` values in root `.env`. Each must be at least 32 characters. Run this command twice to generate the values.
 
 ```powershell
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
@@ -62,16 +61,18 @@ Run that command twice, using one output for each secret. Make sure MongoDB is r
 npm run dev
 ```
 
-The web app defaults to `http://localhost:3000` and the API to `http://localhost:5000`; the API base path is `/api/v1`. Local demo mode is enabled by the example client environment. Set it to `false` when you want to exercise the normal authenticated flow.
+The web app defaults to `http://localhost:3000` and the API to `http://localhost:5000`, with API base path `/api/v1`. The template enables local demo mode. Set `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` to exercise the authenticated flow.
 
 ### Useful commands
 
 ```powershell
+npm run dev:web
+npm run dev:api
 npm run lint
 npm run build
 npm test
-npm --workspace @chainguard/server run providers:verify
-npm --workspace @chainguard/server run security:preflight
+npm --workspace @chainguard/api run providers:verify
+npm --workspace @chainguard/api run security:preflight
 ```
 
 Feed ingestion commands are administrator-facing operational tools; use the Admin UI to preview a source before applying it. Provider verification checks only the configured runtime and credentials; it does not guarantee complete chain coverage.
@@ -80,37 +81,35 @@ Feed ingestion commands are administrator-facing operational tools; use the Admi
 
 ChainGuard can run as **one Vercel project**: Next.js serves the UI, and a Vercel Node Function invokes the existing Express app for `/api/v1/*`. The function opens MongoDB on demand and returns a service-unavailable response if the database cannot be reached.
 
-1. In the existing Vercel project, set **Root Directory** to `client/`, select the **Next.js** framework preset, leave the output directory at its framework default, and keep the build command as `npm run build`.
-2. Enable **Include source files outside of the Root Directory**. The API function imports the Express app from `server/`, and the npm workspace lockfile is at the repository root. Vercel documents this option for monorepos [here](https://vercel.com/docs/monorepos/monorepo-faq).
-3. Keep this Vercel project linked to the same Git repository. The checked-in [client/vercel.json](client/vercel.json) routes `/api/v1/*` to the Express function in `client/api/index.mjs`.
-4. Add all server-side settings from `server/.env.example` to this same Vercel project's Environment Variables. Vercel injects these project variables into the API Function; it does not read a separate `server/.env` file. Use a managed MongoDB URI; set `NODE_ENV=production`, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=lax`, `TRUST_PROXY_HOPS=1`, exact HTTPS `CLIENT_ORIGIN`, distinct production JWT secrets, and all three Brevo settings. Production startup requires Brevo configuration.
-5. Set `NEXT_PUBLIC_API_BASE_URL=/api/v1` and `NEXT_PUBLIC_ENABLE_DEMO_MODE=false` in this project's Production environment. The API and UI then share one origin, so browser requests use same-origin cookies.
-6. Redeploy after changing project settings or environment variables. Vercel applies changed environment values to new deployments ([environment variables](https://vercel.com/docs/environment-variables)).
+1. In the existing project's **Build and Deployment** settings, clear **Root Directory** to select the repository root (`/`). Select **Next.js** and **Node.js 22.x**. [Vercel build settings](https://vercel.com/docs/builds/configure-a-build)
+2. The root [vercel.json](vercel.json) sets **Install Command** to `npm ci`, **Build Command** to `npm run build`, and **Output Directory** to `apps/web/.next`. Clear any old dashboard overrides for those settings. Both workspaces and the lockfile are inside the project root. The root `.vercelignore` excludes local environment files from CLI uploads.
+3. Configure the required values in this project's **Environment Variables**, scoped to **Production** and **Preview**, plus any optional providers. Scope **Development** values to development tooling. Set `MONGODB_URI` to a reachable managed database, `CLIENT_ORIGIN` to the exact HTTPS origin for email links, distinct JWT secrets, all three Brevo settings, `COOKIE_SECURE=true`, `COOKIE_SAME_SITE=lax`, and `TRUST_PROXY_HOPS=1`. Keep Vercel system variables enabled so the build and runtime can detect `VERCEL`. [Vercel environment variables](https://vercel.com/docs/environment-variables)
+4. Deploy after saving the settings. Vercel builds use same-origin `/api/v1` and disable demo mode. The Next.js rewrites route `/api/v1/*`, `/api/health`, and `/api/health/ready` to the Node Function. Check both health URLs on the deployment origin, then sign in and check `/api/v1/auth/me`.
 
-For Preview deployments, same-origin API requests are allowed automatically, but verification emails use the `CLIENT_ORIGIN` value; use a stable preview URL if you need to test email links in Preview. Use a dedicated NodeReal key for BSC indexed history. Vercel runs Express through a Node Function ([Express on Vercel](https://vercel.com/docs/frameworks/backend/express)); keep provider and ingestion work within the function duration limits.
+Use a stable Preview origin for verification and password reset links. The API Function reads injected environment variables and reuses its MongoDB connection on warm invocations. During a database outage, liveness stays available and database-backed requests return 503.
 
 ## Environment variables
 
-Tags: **[REQUIRED]** must be set for the stated deployment or feature; **[OPTIONAL]** enables or tunes a feature; **[LOCAL]** local default; **[VERCEL]** deployment-specific setting; **[CONDITIONAL]** required only when using the associated feature or topology.
+The API validates settings in [apps/api/src/config/env.js](apps/api/src/config/env.js). **[REQUIRED]** marks required values, **[OPTIONAL]** marks settings with defaults, **[LOCAL]** marks local inputs, **[VERCEL]** marks deployment inputs, and **[CONDITIONAL]** marks feature-specific requirements.
 
-Never commit `.env`, `.env.local`, credentials, or generated production secrets. The checked-in `.env.example` files contain placeholders only.
+Never commit `.env` or credentials. The root `.env.example` contains safe defaults and placeholders.
 
-### Client (`client/.env.local`)
+### Public web settings
 
 | Variable | Tag | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | [REQUIRED] [VERCEL] | Browser-visible API base URL, including `/api/v1`. Local default is `http://localhost:5000/api/v1`; for the single-project Vercel deployment set it to `/api/v1`. |
-| `NEXT_PUBLIC_ENABLE_DEMO_MODE` | [OPTIONAL] [LOCAL] | Enables the local demo/auth gate behavior when `true`. Set to `false` in production so users go through the real API-backed account flow. |
+| `NEXT_PUBLIC_API_BASE_URL` | [OPTIONAL] [LOCAL] | Browser-visible API base URL. Local development defaults to `http://localhost:5000/api/v1`. Vercel builds use `/api/v1`. |
+| `NEXT_PUBLIC_ENABLE_DEMO_MODE` | [OPTIONAL] [LOCAL] | Enables local demo behavior when `true`. Vercel builds disable demo mode. |
 
 Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configuration; they are exposed to browsers and must not contain secrets.
 
-### API (`server/.env`)
+### API settings
 
 | Variable | Tag | Purpose |
 | --- | --- | --- |
-| `NODE_ENV` | [LOCAL] [VERCEL] | Runtime mode (`development`, `test`, or `production`). Vercel production deployment must use `production`; this enables production security checks and rate limits. |
-| `PORT` | [LOCAL] [VERCEL] | Local API listen port (default `5000`). Vercel/runtime may supply the port; do not hardcode a deployment port unless the platform requires it. |
-| `API_PREFIX` | [OPTIONAL] | API route prefix, default `/api/v1`; keep it aligned with `NEXT_PUBLIC_API_BASE_URL`. |
+| `NODE_ENV` | [LOCAL] [VERCEL] | Runtime mode (`development`, `test`, or `production`). Vercel supplies `production` for deployed Functions, enabling production security checks and rate limits. |
+| `PORT` | [OPTIONAL] [LOCAL] | Standalone Express listen port, default `5000`. |
+| `API_PREFIX` | [OPTIONAL] | API route prefix, default `/api/v1`. Keep `/api/v1` on Vercel to match the rewrite. |
 | `APP_NAME` | [OPTIONAL] | Service name used in application messages/logging; defaults to `ChainGuard`. |
 | `CLIENT_ORIGIN` | [REQUIRED] [VERCEL] | Exact HTTPS origin used for auth email links and allowed cross-origin requests, e.g. `https://chainguard.example.com`. For this single-project deployment, the UI and API share this origin. Production values must have no path. |
 | `MONGODB_URI` | [REQUIRED] | MongoDB connection string for accounts, sessions, and screening records. Use a reachable managed database URI in Vercel, not the local default. |
@@ -129,19 +128,27 @@ Only values intentionally prefixed with `NEXT_PUBLIC_` belong in client configur
 | `TRON_API_KEY` | [CONDITIONAL] | TronGrid API key for authenticated TRON requests. Needed when the selected endpoint/provider requires it. |
 | `TRONSCAN_API_KEY` | [OPTIONAL] [CONDITIONAL] | Enables live TRONSCAN account-security risk flags. These flags are not a substitute for a bulk TRON phishing/drainer/theft feed. |
 | `ETHEREUM_RPC_URL` | [CONDITIONAL] | Ethereum JSON-RPC endpoint used for live chain queries/history. Use a provider endpoint with suitable indexed-history support for the app's queries. |
-| `ETHEREUM_API_KEY` | [OPTIONAL] | Credential metadata for Ethereum provider status; if the provider key is embedded in the RPC URL, treat that URL as a secret. |
+| `ETHEREUM_API_KEY` | [OPTIONAL] | Presence metadata for the admin provider page. Ethereum queries authenticate through the RPC URL, which can embed a credential. |
 | `BSC_RPC_URL` | [CONDITIONAL] | BSC JSON-RPC endpoint for basic live chain queries. |
-| `BSC_API_KEY` | [OPTIONAL] | Credential metadata for BSC provider status; indexed BSC transfer history uses NodeReal configuration below. |
+| `BSC_API_KEY` | [OPTIONAL] | Presence metadata for the admin provider page. BSC RPC uses the configured endpoint and indexed history uses NodeReal. |
 | `NODEREAL_API_KEY` | [CONDITIONAL] [VERCEL] | Dedicated NodeReal key used for BSC indexed native and ERC-20 transfer history. Configure it for production; shared fallback capacity is only for limited development checks. |
 | `INTELLIGENCE_INGESTION_ENABLED` | [OPTIONAL] | Set `true` to enable admin-triggered intelligence ingestion endpoints; default `false`. It does not schedule ingestion automatically. |
 | `INTELLIGENCE_SOURCE_TIMEOUT_MS` | [OPTIONAL] | Per-source ingestion request timeout in milliseconds (1000–60000); default `15000`. Keep it within the serverless execution budget. |
 | `RATE_LIMIT_WINDOW_MS` | [OPTIONAL] | Rate-limit window in milliseconds; default `900000` (15 minutes). |
 | `RATE_LIMIT_MAX_REQUESTS` | [OPTIONAL] | Maximum requests per IP per rate-limit window outside development; default `100`. |
 | `RATE_LIMIT_DEVELOPMENT_MAX_REQUESTS` | [OPTIONAL] [LOCAL] | Development request limit; default `1000`. It is not used as the production limit. |
-| `TRUST_PROXY_HOPS` | [OPTIONAL] [VERCEL] | Number of trusted reverse-proxy hops for Express IP handling. Use `1` for the Vercel API path; local direct server default is `0`. Set to match the actual proxy topology. |
+| `TRUST_PROXY_HOPS` | [OPTIONAL] [VERCEL] | Number of trusted reverse-proxy hops for Express IP handling. Defaults to `1` on Vercel and `0` for the local direct server. |
 | `LOG_LEVEL` | [OPTIONAL] | Logging verbosity (`fatal`, `error`, `warn`, `info`, `debug`, `trace`, `silent`); default `info`. |
 
-The example files list the supported settings and defaults. Remove any blank optional value you do not use, or leave it empty; do not deploy the example JWT placeholders.
+### Operational inputs
+
+| Variable | Tag | Purpose |
+| --- | --- | --- |
+| `VERCEL` | [VERCEL] | Vercel system flag. Activates injected API configuration, same-origin web settings, and the one-hop proxy default. |
+| `CHAINGUARD_ADMIN_PASSWORD` | [LOCAL] [CONDITIONAL] | Required for `npm run seed:admin`. Supply it to the seed process. |
+| `npm_config_source`, `npm_config_apply` | [LOCAL] [OPTIONAL] | Legacy npm inputs for ingestion. Use the CLI flags `--source` and `--apply`. |
+
+The legacy `ETHERSCAN_API_KEY` is unused. Ethereum queries use `ETHEREUM_RPC_URL`, including Alchemy indexed-history calls. The Vercel CLI can generate a temporary `VERCEL_OIDC_TOKEN` during an environment pull. ChainGuard does not read that token.
 
 ## Security and operational notes
 

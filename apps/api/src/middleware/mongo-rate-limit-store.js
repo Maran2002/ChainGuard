@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import mongoose from "mongoose";
+import { env } from "../config/env.js";
 
 const collectionName = "rate_limit_counters";
 
@@ -82,5 +83,5 @@ export class MongoRateLimitStore {
 }
 
 export function productionRateLimitStore(prefix) {
-  return process.env.NODE_ENV === "production" ? new MongoRateLimitStore(prefix) : undefined;
+  return env.NODE_ENV === "production" ? new MongoRateLimitStore(prefix) : undefined;
 }

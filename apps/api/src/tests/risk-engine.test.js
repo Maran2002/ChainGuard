@@ -15,7 +15,7 @@ test("incomplete coverage without evidence returns UNKNOWN instead of LOW", () =
   const result = calculateRisk({ ...baseInput, coverage: { complete: false, fresh: false } });
   assert.equal(result.verdict, "UNKNOWN");
   assert.equal(result.riskScore, null);
-  assert.match(result.recommendedAction, /Configure providers/);
+  assert.match(result.recommendedAction, /source coverage is incomplete or stale/);
 });
 
 test("confirmed sanctions and issuer freeze matches return CRITICAL", () => {

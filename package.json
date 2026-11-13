@@ -2,25 +2,25 @@
   "name": "chainguard",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["client", "server"],
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:client": "npm --workspace client run dev",
-    "dev:server": "npm --workspace server run dev",
-    "build": "npm --workspace client run build",
-    "lint": "npm --workspace client run lint && npm --workspace server run lint",
-    "test": "npm --workspace client run test --if-present && npm --workspace server run test --if-present",
-    "seed": "npm --workspace server run seed --if-present",
-    "ingest": "npm --workspace server run ingest --",
-    "seed:admin": "npm --workspace server run seed:admin"
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "npm --workspace @chainguard/web run dev",
+    "dev:api": "npm --workspace @chainguard/api run dev",
+    "build": "npm --workspace @chainguard/web run build",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "ingest": "npm --workspace @chainguard/api run ingest --",
+    "seed:admin": "npm --workspace @chainguard/api run seed:admin"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.0",
     "concurrently": "^9.2.1",
-    "eslint": "^9.39.0"
+    "next": "^16.0.0"
   },
-  "optionalDependencies": {
-    "@tailwindcss/oxide-linux-x64-gnu": "4.3.5",
-    "lightningcss-linux-x64-gnu": "1.33.0"
+  "engines": {
+    "node": "22.x"
   }
 }
