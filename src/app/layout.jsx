@@ -11,7 +11,7 @@ export default async function RootLayout({ children }) {
   await connection();
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, AlertTriangle, ArrowRight, Bell, ChevronDown, Clock3,
-  Compass, FileSearch2, Fingerprint, History, LayoutDashboard, Menu, MoreHorizontal,
+  Activity, AlertTriangle, ArrowRight, ChevronDown, Clock3,
+  Compass, FileSearch2, Fingerprint, Info, LayoutDashboard, Menu, MoreHorizontal,
   LogOut, Settings2, ShieldCheck, ShieldEllipsis, SlidersHorizontal, UsersRound,
   Wallet, X,
 } from "lucide-react";
@@ -125,6 +125,7 @@ export function Sidebar({ open, onClose, user }) {
 export function Header({ onMenu, user }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [infoOpen, setInfoOpen] = useState(false);
   const pageName = pathname === "/dashboard" ? "Dashboard" : pathname === "/investigate" ? "Investigations" : pathname.startsWith("/history/") ? "Saved screening" : pathname.startsWith("/directory/") ? "Intelligence record" : pathname.startsWith("/investigate/") ? "Investigation graph" : pathname.split("/").filter(Boolean).at(-1)?.replace(/^./, (letter) => letter.toUpperCase()) || "Dashboard";
   useEffect(() => {
     function handleShortcut(event) {
@@ -141,18 +142,42 @@ export function Header({ onMenu, user }) {
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [pathname, router]);
-  return <header className="topbar">
+  useEffect(() => {
+    if (!infoOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setInfoOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [infoOpen]);
+  return <>
+  <header className="topbar">
     <button className="mobile-menu icon-button" onClick={onMenu} aria-label="Open navigation"><Menu size={19} /></button>
     <div className="breadcrumb"><span>Workspace</span><span className="crumb-sep">/</span><b>{pageName}</b></div>
     <div className="topbar-actions">
-      <Link href="/history" className="icon-button notification" aria-label="View recent activity">
-      <History size={18} /></Link><span className="top-divider" />
       <Link href="/profile" className="top-profile" aria-label={`Profile: ${user?.name || user?.username || "account"}`}>
       <span className="profile-avatar small">{initials(user?.name || user?.username)}</span>
       {/* <ChevronDown size={14} /> */}
       </Link>
+      <button className="icon-button header-info-button" type="button" aria-label="About ChainGuard" aria-expanded={infoOpen} onClick={() => setInfoOpen(true)}><Info size={17} /></button>
       </div>
-  </header>;
+  </header>
+    <div className={`info-drawer-backdrop ${infoOpen ? "is-open" : ""}`} aria-hidden="true" onClick={() => setInfoOpen(false)} />
+    <aside className={`info-drawer ${infoOpen ? "is-open" : ""}`} role="dialog" aria-modal="true" aria-labelledby="info-drawer-title" aria-hidden={!infoOpen}>
+      <div className="info-drawer-header"><div><span className="eyebrow"><span className="eyebrow-line" /> ABOUT THE PROJECT</span><h2 id="info-drawer-title">ChainGuard</h2></div><button className="icon-button" type="button" aria-label="Close information panel" onClick={() => setInfoOpen(false)}><X size={17} /></button></div>
+      <div className="info-drawer-content">
+        <section><h3>Why It Was Created</h3><p>To make blockchain wallet risk checks and investigations easier to review, with evidence and data coverage visible alongside each result.</p></section>
+        <section><h3>Purpose</h3><p>ChainGuard supports read-only wallet screening and bounded transaction investigations across TRON, Ethereum, and BNB Smart Chain.</p></section>
+        <section><h3>Key features</h3><ul><li>Wallet screening with explainable risk results</li><li>Intelligence directory and saved screening history</li><li>Bounded wallet relationship graphs and transfer history</li><li>Source freshness, provider status, and coverage details</li><li>Administrator tools for intelligence and data ingestion</li></ul></section>
+        <section className="info-author"><h3>Author citation</h3><p>Created by the ChainGuard project author.</p><a href="https://elamaran-a.vercel.app/" target="_blank" rel="noopener noreferrer">Visit the author&apos;s portfolio <ArrowRight size={14} /></a></section>
+      </div>
+    </aside>
+  </>;
 }
 
 function RiskChart({ daily = [] }) {
@@ -222,6 +247,5 @@ export default function Dashboard() {
       <article className="panel recent-panel"><div className="panel-heading"><div><h2>Recent screenings</h2><p>Your latest saved wallet screenings</p></div><Link href="/history" className="text-link">View all <ArrowRight size={14} /></Link></div><div className="table-scroll"><table><thead><tr><th>WALLET</th><th>NETWORK</th><th>RISK LEVEL</th><th>SCORE</th><th>SCREENED (IST)</th><th /></tr></thead><tbody>{recent.map((item) => <tr key={item._id}><td><Link className="wallet-cell" href={`/history/${item._id}`}><span className="wallet-avatar">{initials(item.chain)}</span><span><b>{item.address}</b><small>{item.providerStatus === "MOCK" ? "Fixture provider" : item.providerStatus === "UNAVAILABLE" ? "Provider unavailable" : "Saved screening"}</small></span></Link></td><td><span className={`network-tag network-${item.chain.toLowerCase()}`}><i />{item.chain}</span></td><td><RiskPill verdict={item.verdict} /></td><td><span className="score-cell">{item.riskScore ?? "—"}<small>{item.riskScore == null ? "" : "/100"}</small></span></td><td className="time-cell">{formatDateTime(item.screenedAt)}</td><td><Link className="row-more" href={`/history/${item._id}`} aria-label="Open saved screening"><ArrowRight size={16} /></Link></td></tr>)}</tbody></table></div><div className="table-footer"><span>{loading ? "Loading saved screenings…" : recent.length ? `Showing ${recent.length} recent of ${total.toLocaleString()} screenings` : "No screening activity in the last 28 days"}</span><Link href="/history">Browse history <ArrowRight size={13} /></Link></div></article>
       <article className="panel sources-panel"><div className="panel-heading"><div><h2>Data sources</h2><p>Provider status and latest activity</p></div><Link href="/admin/ingestion" className="icon-button more-button" aria-label="Manage data sources"><MoreHorizontal size={19} /></Link></div><div className="source-list">{sources.length ? sources.map((source) => <div className="source-row" key={source.id}><span className={`source-logo ${source.kind === "BLOCKCHAIN" ? "chain-source" : "intelligence-source"}`}>{source.kind === "BLOCKCHAIN" ? source.name.slice(0, 2) : "I"}</span><span className="source-info"><b>{source.name}</b><small>{source.note || source.kind}</small></span><span className="source-sync"><i className={statusClass(source.status)} /> {sourceActivity(source)}</span></div>) : <div className="source-empty">{loading ? "Loading source status…" : "No providers or intelligence feeds are configured."}</div>}</div><div className="source-demo"><AlertTriangle size={14} /><span>Intelligence freshness reflects the latest successful manual apply; overall screening coverage is still incomplete.</span></div></article>
     </section>
-    <footer className="page-footer"><span>ChainGuard <i>·</i> Risk intelligence for the on-chain world</span><span><ShieldCheck size={13} /> {total ? "Saved screening data · source coverage may be incomplete" : "No saved screening data yet"}</span></footer>
   </div></main></div>;
 }

@@ -51,7 +51,16 @@ function InvestigationsView() {
   return <div className="app-shell"><Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} /><main className="main-panel"><Header onMenu={() => setMenuOpen(true)} /><div className="page-content">
     <div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> COUNTERPARTY ANALYSIS</div><h1>Investigations</h1><p>Open a saved screening to review its bounded transaction graph.</p></div><Link href="/screen" className="primary-button"><FileSearch2 size={14} /> Screen a wallet</Link></div>
     <section className="panel history-panel investigation-queue">
-      <div className="history-toolbar"><label className="history-search"><Search size={15} /><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search wallet address…" aria-label="Search investigations" />{searchText && <button type="button" aria-label="Clear search" onClick={() => setSearchText("")}><X size={13} /></button>}</label><label className="history-filter">Chain<select value={query.chain} onChange={(event) => setFilter("chain", event.target.value)}><option value="">All chains</option><option>TRON</option><option>ETHEREUM</option><option>BSC</option></select></label><label className="history-filter">Risk<select value={query.verdict} onChange={(event) => setFilter("verdict", event.target.value)}><option value="">All risk levels</option>{["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"].map((verdict) => <option key={verdict}>{verdict}</option>)}</select></label>{filtered && <button className="clear-filters" onClick={clearFilters}>Reset <X size={12} /></button>}</div>
+      <div className="history-toolbar">
+        <label className="history-search">
+          <Search size={15} />
+          <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search wallet address…" aria-label="Search investigations" />
+          {searchText && <button type="button" aria-label="Clear search" onClick={() => setSearchText("")}><X size={13} /></button>}
+        </label>
+        <label className="history-filter">Chain<select value={query.chain} onChange={(event) => setFilter("chain", event.target.value)}><option value="">All chains</option><option>TRON</option><option>ETHEREUM</option><option>BSC</option></select></label>
+        <label className="history-filter">Risk<select value={query.verdict} onChange={(event) => setFilter("verdict", event.target.value)}><option value="">All risk levels</option>{["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"].map((verdict) => <option key={verdict}>{verdict}</option>)}</select></label>
+        {filtered && <button className="clear-filters" onClick={clearFilters}>Reset <X size={12} /></button>}
+      </div>
       <div className="history-summary"><span>{meta ? `${meta.total.toLocaleString()} saved screenings` : "Saved screenings"}</span><span>{status === "loading" ? "Loading investigations…" : status === "ready" ? "Only your account records are shown" : "Investigation queue unavailable"}</span></div>
       {status === "error" && <div className="history-state"><ShieldAlert size={23} /><h2>Could not load investigations</h2><p>{error}</p><button className="primary-button" onClick={() => void load()}><RefreshCw size={14} /> Retry</button></div>}
       {status === "loading" && <div className="history-state"><RefreshCw className="spin" size={19} /> Loading saved screenings…</div>}
@@ -63,7 +72,6 @@ function InvestigationsView() {
       </article>)}</div>}
       {status === "ready" && items.length > 0 && <div className="directory-pagination"><span>Page {meta?.page || query.page} of {Math.max(1, meta?.pages || 1)}</span><div><button disabled={query.page <= 1} onClick={() => setFilter("page", query.page - 1)}><ArrowLeft size={13} /> Previous</button><button disabled={!meta || query.page >= meta.pages} onClick={() => setFilter("page", query.page + 1)}>Next <ArrowRight size={13} /></button></div></div>}
     </section>
-    <footer className="page-footer"><span>Graph results are limited to stored provider data and the screening’s requested depth.</span><span><Compass size={13} /> Max depth 2 hops</span></footer>
   </div></main></div>;
 }
 

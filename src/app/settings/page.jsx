@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Check, FileSearch2, RefreshCw, Settings2, ShieldCheck } from "lucide-react";
+import { Check, FileSearch2, RefreshCw, Settings2, ShieldCheck } from "lucide-react";
 import AuthGate from "../../components/auth-gate";
 import { Header, Sidebar } from "../../components/dashboard";
 import { getCurrentUser, updateUserPreferences } from "../../services/api";
@@ -55,7 +55,6 @@ function SettingsView() {
       {error && <div className="profile-error" role="alert">{error}</div>}{notice && <div className="profile-notice" role="status">{notice}</div>}
       <div className="settings-actions"><span><ShieldCheck size={13} /> Preferences apply to your account only.</span><button className="primary-button" type="submit" disabled={saving}>{saving ? <><RefreshCw size={13} className="spin" /> Saving…</> : <><Check size={13} /> Save preferences</>}</button></div>
     </form>}
-    <footer className="page-footer"><Link href="/admin/providers">Provider setup (administrators) <ArrowRight size={13} /></Link><Link href="/profile">Profile &amp; security <ArrowRight size={13} /></Link></footer>
   </div></main></div>;
 }
 

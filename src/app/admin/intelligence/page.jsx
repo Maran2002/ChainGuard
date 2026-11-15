@@ -155,7 +155,6 @@ function AdminIntelligenceView() {
       </section>
     </>}
     {editing && <div className="intelligence-modal-backdrop"><form className="panel intelligence-editor intelligence-modal" onSubmit={updateRecord}><div className="panel-heading"><div><h2>Edit intelligence record</h2><p>{editing.address} · {editing.chain}</p></div><button type="button" className="icon-button" aria-label="Close editor" onClick={() => setEditing(null)}><X size={16} /></button></div><RecordFields value={editing} onChange={setEditing} editing /><div className="intelligence-form-actions"><button type="button" className="secondary-button" onClick={() => setEditing(null)}>Cancel</button><button className="primary-button" disabled={working || editing.isActive === false && !editing.confirmDeactivate}>{working ? "Saving…" : "Save changes"}</button></div></form></div>}
-    <footer className="page-footer"><span>Manual classifications are administrator-curated and are not an official source unless a citation is provided.</span><Link href="/admin/ingestion">Manage source ingestion <ArrowRight size={13} /></Link></footer>
   </div></main></div>;
 }
 
